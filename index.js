@@ -50,7 +50,12 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/apartments', async (req, res) => {
+            const result = await apartmentsBase.find().toArray()
+            res.send(result)
+        })
 
+        
 
         // All [ POST ] APIS >
         // All [ PATCH ] APIS >
