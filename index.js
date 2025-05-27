@@ -33,20 +33,29 @@ async function run() {
     try {
         // await client.connect();
         const database = client.db("RentLoftDB");
-        const users = database.collection("users");
-        const payments = database.collection("payments");
-        const apartments = database.collection("apartments");
-        const coupons = database.collection("coupons");
-        const stats = database.collection("stats");
-        const announcements = database.collection("announcements");
-
+        const usersBase = database.collection("users");
+        const paymentsBase = database.collection("payments");
+        const apartmentsBase = database.collection("apartments");
+        const couponsBase = database.collection("coupons");
+        const statsBase = database.collection("stats");
+        const announcementsBase = database.collection("announcements");
 
         // All [ GET ] APIS >
-
         app.get('/', (req, res) => {
             res.send('Rent Loft > https://rentloft.surge.sh')
         })
 
+        app.get('/coupons', async (req, res) => {  //Public
+            const result = await couponsBase.find().toArray()
+            res.send(result)
+        })
+
+
+
+        // All [ POST ] APIS >
+        // All [ PATCH ] APIS >
+        // All [ PUT ] APIS >
+        // All [ DELETE ] APIS >
 
         await client.db("admin").command({ ping: 1 });  // Need to comment this part before deployment
         console.log("Connected to MongoDB!");  // Need to comment this part before deployment
