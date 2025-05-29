@@ -36,6 +36,7 @@ async function run() {
         const usersBase = database.collection("users");
         const paymentsBase = database.collection("payments");
         const apartmentsBase = database.collection("apartments");
+        const apartmentRentBase = database.collection("apartmentRent");
         const couponsBase = database.collection("coupons");
         const statsBase = database.collection("stats");
         const announcementsBase = database.collection("announcements");
@@ -55,9 +56,29 @@ async function run() {
             res.send(result)
         })
 
-        
+        app.get('/users', async (req, res) => {
+            const result = await usersBase.find().toArray()
+            res.send(result)
+        })
 
         // All [ POST ] APIS >
+        app.post('/addUser', async (req, res) => {
+            const response = req.body;
+            const result = await usersBase.insertOne(response)
+            res.send(result)
+        })
+
+        app.post('/apartmentPrice', async (req, res) => { 
+            const min = parseInt(req.body.min);
+            const max = parseInt(req.body.max);
+
+            const query = {
+                rent: { $gte: min, $lte: max }
+            };
+
+            const result = await apartmentsBase.find(query).toArray();
+            res.send(result);
+        })
         // All [ PATCH ] APIS >
         // All [ PUT ] APIS >
         // All [ DELETE ] APIS >
