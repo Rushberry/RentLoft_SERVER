@@ -13,7 +13,7 @@ app.use(cors({
 app.use(express.json())
 
 // MongoDB
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const username = process.env.DB_USER;
 const password = process.env.DB_PASS;
@@ -46,7 +46,7 @@ async function run() {
             res.send('Rent Loft > https://rentloft.surge.sh')
         })
 
-        app.get('/coupons', async (req, res) => {  //Public
+        app.get('/coupons', async (req, res) => {
             const result = await couponsBase.find().toArray()
             res.send(result)
         })
@@ -56,8 +56,18 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/users', async (req, res) => {
+        app.get('/users', async (req, res) => {     // Admin
             const result = await usersBase.find().toArray()
+            res.send(result)
+        })
+
+        app.get('/apartmentRent', async (req, res) => { //Member
+            const result = await apartmentRentBase.find().toArray()
+            res.send(result)
+        })
+
+        app.get('/announcements', async (req, res) => {
+            const result = await announcementsBase.find().toArray()
             res.send(result)
         })
 
@@ -68,7 +78,41 @@ async function run() {
             res.send(result)
         })
 
-        app.post('/apartmentPrice', async (req, res) => { 
+        app.post('/announcements', async (req, res) => { //Admin
+            const response = req.body;
+            const result = await announcementsBase.insertOne(response)
+            res.send(result)
+        })
+
+        app.post('/coupons', async (req, res) => { //Admin
+            const response = req.body;
+            const result = await couponsBase.insertOne(response)
+            res.send(result)
+        })
+
+        app.post('/checkRole', async (req, res) => {
+            const response = req.body;
+            const email = req.body.email;
+            // console.log(email)
+            const user = await usersBase.findOne({ email: email });
+            const data = { role: user?.role }
+            res.send(data)
+        })
+
+        app.post('/apartmentRent', async (req, res) => {
+            const response = req.body;
+            const email = req.body.email;
+            console.log(email)
+            const existing = await apartmentRentBase.findOne({ email: email });
+            // console.log(existing)
+            if (existing) {
+                return res.send({ message: 'You’ve already applied for an apartment.' });
+            }
+            const result = await apartmentRentBase.insertOne(response);
+            res.send({ message: 'Apartment application submitted successfully.', result });
+        })
+
+        app.post('/apartmentPrice', async (req, res) => {
             const min = parseInt(req.body.min);
             const max = parseInt(req.body.max);
 
@@ -79,7 +123,25 @@ async function run() {
             const result = await apartmentsBase.find(query).toArray();
             res.send(result);
         })
+
+
         // All [ PATCH ] APIS >
+        app.patch('/updateCouponActive/:id', async (req, res) => { //Admin
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true }
+            const updateCoupon = { $set: { status: "active" }}
+            const result = await couponsBase.updateOne(filter, updateCoupon, options)
+            res.send(result)
+        })
+        app.patch('/updateCouponInactive/:id', async (req, res) => { //Admin
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true }
+            const updateCoupon = { $set: { status: "inactive" }}
+            const result = await couponsBase.updateOne(filter, updateCoupon, options)
+            res.send(result)
+        })
         // All [ PUT ] APIS >
         // All [ DELETE ] APIS >
 
