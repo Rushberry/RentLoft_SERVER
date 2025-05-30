@@ -61,6 +61,12 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/members', async (req, res) => {     // Admin
+            const filter = {role: 'member'}
+            const result = await usersBase.find(filter).toArray()
+            res.send(result)
+        })
+
         app.get('/apartmentRent', async (req, res) => { //Member + Admin
             const result = await apartmentRentBase.find().toArray()
             res.send(result)
