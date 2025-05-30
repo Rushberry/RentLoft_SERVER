@@ -61,7 +61,7 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/apartmentRent', async (req, res) => { //Member
+        app.get('/apartmentRent', async (req, res) => { //Member + Admin
             const result = await apartmentRentBase.find().toArray()
             res.send(result)
         })
@@ -130,7 +130,7 @@ async function run() {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true }
-            const updateCoupon = { $set: { status: "active" }}
+            const updateCoupon = { $set: { status: "active" } }
             const result = await couponsBase.updateOne(filter, updateCoupon, options)
             res.send(result)
         })
@@ -138,9 +138,29 @@ async function run() {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true }
-            const updateCoupon = { $set: { status: "inactive" }}
+            const updateCoupon = { $set: { status: "inactive" } }
             const result = await couponsBase.updateOne(filter, updateCoupon, options)
             res.send(result)
+        })
+        app.patch('/accept', async (req, res) => { //Admin
+            const response = req.body;
+            const id = response.id;
+            const email = response.email;
+            const filter = { _id: new ObjectId(id) }
+            const updateCoupon = { $set: { status: "checked", approval: true } }
+            const result1 = await apartmentRentBase.updateOne(filter, updateCoupon)
+            const cursor = { email: email }
+            const userUpdate = { $set: { role: 'member' } }
+            const result2 = await usersBase.updateOne(cursor, userUpdate)
+            res.send({ message: 'Apartment Request Accepted & Changed User to Member', result1, result2 })
+        })
+        app.patch('/reject', async (req, res) => { //Admin
+            const response = req.body;
+            const id = response.id;
+            const filter = { _id: new ObjectId(id) }
+            const updateCoupon = { $set: { status: "checked", approval: false } }
+            const result = await apartmentRentBase.updateOne(filter, updateCoupon)
+            res.send({ message: 'Apartment Request Accepted & Changed User to Member', result })
         })
         // All [ PUT ] APIS >
         // All [ DELETE ] APIS >
