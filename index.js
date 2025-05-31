@@ -3,6 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const jwt = require('jsonwebtoken')
 const app = express()
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const port = process.env.PORT || 2008
 
 // Middlewares
@@ -41,6 +42,64 @@ async function run() {
         const statsBase = database.collection("stats");
         const announcementsBase = database.collection("announcements");
 
+        // JWT API & MIDDLEWARE >
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.SECRET_TOKEN, { expiresIn: '1h' });
+            res.send({ token });
+        })
+
+        const verifyToken = (req, res, next) => {
+            console.log('inside verify token', req.headers.authorization);
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'unauthorized access' });
+            }
+            const token = req.headers.authorization;
+            jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'unauthorized access' })
+                }
+                req.decoded = decoded;
+                next();
+            })
+        }
+
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+
+            const query = { email: email };
+            const user = await usersBase.findOne(query);
+            const isAdmin = user?.role === 'admin';
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        }
+
+        const verifyMember = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await usersBase.findOne(query);
+            const isAdmin = user?.role === 'member';
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        }
+
+        const verifyAdminOrMember = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await usersBase.findOne(query);
+            const isAdmin = user?.role === 'admin';
+            const isMember = user?.role === 'member';
+            if (!isAdmin && !isMember) {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        }
+
+
         // All [ GET ] APIS >
         app.get('/', (req, res) => {
             res.send('Rent Loft > https://rentloft.surge.sh')
@@ -56,23 +115,35 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/users', async (req, res) => {     // Admin
+        app.get('/users', verifyToken, verifyAdmin, async (req, res) => {     // Admin
             const result = await usersBase.find().toArray()
             res.send(result)
         })
 
-        app.get('/members', async (req, res) => {     // Admin
-            const filter = {role: 'member'}
+        app.get('/user', verifyToken, verifyAdmin, async (req, res) => {     // Admin
+            const filter = { role: 'user' }
             const result = await usersBase.find(filter).toArray()
             res.send(result)
         })
 
-        app.get('/apartmentRent', async (req, res) => { //Member + Admin
+        app.get('/members', verifyToken, verifyAdmin, async (req, res) => {     // Admin
+            const filter = { role: 'member' }
+            const result = await usersBase.find(filter).toArray()
+            res.send(result)
+        })
+
+        app.get('/admins', verifyToken, verifyAdmin, async (req, res) => {     // Admin
+            const filter = { role: 'admin' }
+            const result = await usersBase.find(filter).toArray()
+            res.send(result)
+        })
+
+        app.get('/apartmentRent', verifyToken, verifyAdminOrMember, async (req, res) => { //Admins &  Members
             const result = await apartmentRentBase.find().toArray()
             res.send(result)
         })
 
-        app.get('/announcements', async (req, res) => {
+        app.get('/announcements', verifyToken, async (req, res) => {
             const result = await announcementsBase.find().toArray()
             res.send(result)
         })
@@ -84,13 +155,13 @@ async function run() {
             res.send(result)
         })
 
-        app.post('/announcements', async (req, res) => { //Admin
+        app.post('/announcements', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const response = req.body;
             const result = await announcementsBase.insertOne(response)
             res.send(result)
         })
 
-        app.post('/coupons', async (req, res) => { //Admin
+        app.post('/coupons', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const response = req.body;
             const result = await couponsBase.insertOne(response)
             res.send(result)
@@ -105,7 +176,7 @@ async function run() {
             res.send(data)
         })
 
-        app.post('/apartmentRent', async (req, res) => {
+        app.post('/apartmentRent', verifyToken, async (req, res) => {
             const response = req.body;
             const email = req.body.email;
             // console.log(email)
@@ -114,11 +185,15 @@ async function run() {
             if (existing) {
                 return res.send({ message: 'You’ve already applied for an apartment.' });
             }
+            const id = req.body.apartmentId;
+            const filter = { _id: new ObjectId(id) }
+            const updateApartmentAvailability = { $set: { availability: false } }
+            const update = await apartmentsBase.updateOne(filter, updateApartmentAvailability)
             const result = await apartmentRentBase.insertOne(response);
-            res.send({ message: 'Apartment application submitted successfully.', result });
+            res.send({ message: 'Apartment application submitted successfully.', result, update });
         })
 
-        app.post('/apartmentRentInfo', async (req, res) => { //Member
+        app.post('/apartmentRentInfo', verifyToken, verifyMember, async (req, res) => { //Member
             const email = req.body.email;
             const result = await apartmentRentBase.findOne({ email: email });
             res.send(result);
@@ -136,9 +211,22 @@ async function run() {
             res.send(result);
         })
 
+        // Stripe Payment Gateway
+        app.post("/stripe-intent",verifyMember, async (req, res) => {
+            const { rentAmount } = req.body;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: parseInt(rentAmount * 100),
+                currency: "bdt",
+                payment_method_types: [
+                    "card",
+                ],
+            });
+            res.send({ clientSecret: paymentIntent.client_secret })
+        })
+
 
         // All [ PATCH ] APIS >
-        app.patch('/updateCouponActive/:id', async (req, res) => { //Admin
+        app.patch('/updateCouponActive/:id', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true }
@@ -146,7 +234,7 @@ async function run() {
             const result = await couponsBase.updateOne(filter, updateCoupon, options)
             res.send(result)
         })
-        app.patch('/updateCouponInactive/:id', async (req, res) => { //Admin
+        app.patch('/updateCouponInactive/:id', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true }
@@ -154,33 +242,41 @@ async function run() {
             const result = await couponsBase.updateOne(filter, updateCoupon, options)
             res.send(result)
         })
-        app.patch('/degradeMember', async (req, res) => { //Admin
+        app.patch('/degradeMember', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const email = req.body.email;
             const filter = { email: email }
             const updateToUser = { $set: { role: "user" } }
             const result = await usersBase.updateOne(filter, updateToUser)
             res.send(result)
         })
-        app.patch('/accept', async (req, res) => { //Admin
+        app.patch('/accept', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const response = req.body;
             const id = response.id;
             const email = response.email;
             const date = response.date;
             const filter = { _id: new ObjectId(id) }
-            const updateCoupon = { $set: { status: "checked", approval: true, acceptDate: date } }
-            const result1 = await apartmentRentBase.updateOne(filter, updateCoupon)
+            const update = { $set: { status: "checked", approval: true, acceptDate: date } }
+            const result1 = await apartmentRentBase.updateOne(filter, update)
             const cursor = { email: email }
             const userUpdate = { $set: { role: 'member' } }
             const result2 = await usersBase.updateOne(cursor, userUpdate)
-            res.send({ message: 'Apartment Request Accepted & Changed User to Member', result1, result2 })
+            const ids = req.body.apartmentId;
+            const find = { _id: new ObjectId(ids) }
+            const updateApartmentAvailability = { $set: { availability: false } }
+            const result3 = await apartmentsBase.updateOne(find, updateApartmentAvailability)
+            res.send({ message: 'Apartment Request Accepted & Changed User to Member', result1, result2, result3 })
         })
-        app.patch('/reject', async (req, res) => { //Admin
+        app.patch('/reject', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const response = req.body;
             const id = response.id;
             const filter = { _id: new ObjectId(id) }
-            const updateCoupon = { $set: { status: "checked", approval: false } }
-            const result = await apartmentRentBase.updateOne(filter, updateCoupon)
-            res.send({ message: 'Apartment Request Rejected', result })
+            const update = { $set: { status: "checked", approval: false } }
+            const result = await apartmentRentBase.updateOne(filter, update)
+            const ids = req.body.apartmentId;
+            const find = { _id: new ObjectId(ids) }
+            const updateApartmentAvailability = { $set: { availability: true } }
+            const result2 = await apartmentsBase.updateOne(find, updateApartmentAvailability)
+            res.send({ message: 'Apartment Request Rejected', result, result2 })
         })
         // All [ PUT ] APIS >
         // All [ DELETE ] APIS >
