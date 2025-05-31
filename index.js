@@ -151,10 +151,29 @@ async function run() {
 
         // All [ POST ] APIS >
 
+        // Stripe Payment Gateway
+        app.post("/stripe-intent", async (req, res) => {
+            const { rentAmount } = req.body;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: parseInt(rentAmount * 100),
+                currency: "bdt",
+                payment_method_types: [
+                    "card",
+                ],
+            });
+            res.send({ clientSecret: paymentIntent.client_secret })
+        })
+        
         app.post('/paymentHistory', verifyToken, verifyMember, async (req, res) => { //Member
             const response = req.body;
             const email = req.body.email;
             const result = await paymentsBase.find({ email: email }).toArray();
+            res.send(result)
+        })
+
+        app.post('/payments', verifyToken, verifyMember, async (req, res) => { //Member
+            const response = req.body;
+            const result = await paymentsBase.insertOne(response)
             res.send(result)
         })
 
@@ -194,6 +213,7 @@ async function run() {
             const result = await couponsBase.insertOne(response)
             res.send(result)
         })
+
 
         app.post('/checkRole', async (req, res) => {
             const response = req.body;
@@ -239,18 +259,6 @@ async function run() {
             res.send(result);
         })
 
-        // Stripe Payment Gateway
-        app.post("/stripe-intent", verifyMember, async (req, res) => {
-            const { rentAmount } = req.body;
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: parseInt(rentAmount * 100),
-                currency: "bdt",
-                payment_method_types: [
-                    "card",
-                ],
-            });
-            res.send({ clientSecret: paymentIntent.client_secret })
-        })
 
 
         // All [ PATCH ] APIS >
