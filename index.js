@@ -50,7 +50,7 @@ async function run() {
         })
 
         const verifyToken = (req, res, next) => {
-            console.log('inside verify token', req.headers.authorization);
+            // console.log('inside verify token', req.headers.authorization);
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: 'unauthorized access' });
             }
@@ -148,7 +148,16 @@ async function run() {
             res.send(result)
         })
 
+        
         // All [ POST ] APIS >
+
+        app.post('/paymentHistory', verifyToken, verifyMember, async (req, res) => { //Member
+            const response = req.body;
+            const email = req.body.email;
+            const result = await paymentsBase.find({ email: email }).toArray();
+            res.send(result)
+        })
+        
         app.post('/addUser', async (req, res) => {
             const response = req.body;
             const result = await usersBase.insertOne(response)
