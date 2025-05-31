@@ -148,7 +148,7 @@ async function run() {
             res.send(result)
         })
 
-        
+
         // All [ POST ] APIS >
 
         app.post('/paymentHistory', verifyToken, verifyMember, async (req, res) => { //Member
@@ -157,12 +157,31 @@ async function run() {
             const result = await paymentsBase.find({ email: email }).toArray();
             res.send(result)
         })
-        
+
         app.post('/addUser', async (req, res) => {
             const response = req.body;
             const result = await usersBase.insertOne(response)
             res.send(result)
         })
+
+        app.post('/checkCoupon', verifyToken, verifyMember, async (req, res) => { // Member
+            const code = req.body.code;
+            console.log(code);
+
+            const coupon = await couponsBase.findOne({ code: code });
+
+            if (coupon && coupon.status === "active") {
+                res.send({
+                    message: 'Coupon Applied',
+                    discount: coupon?.discount
+                });
+            } else {
+                res.send({
+                    message: 'Coupon not found or unavailable'
+                });
+            }
+        });
+
 
         app.post('/announcements', verifyToken, verifyAdmin, async (req, res) => { //Admin
             const response = req.body;
@@ -221,7 +240,7 @@ async function run() {
         })
 
         // Stripe Payment Gateway
-        app.post("/stripe-intent",verifyMember, async (req, res) => {
+        app.post("/stripe-intent", verifyMember, async (req, res) => {
             const { rentAmount } = req.body;
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: parseInt(rentAmount * 100),
