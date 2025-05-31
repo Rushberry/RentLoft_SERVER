@@ -163,7 +163,7 @@ async function run() {
             });
             res.send({ clientSecret: paymentIntent.client_secret })
         })
-        
+
         app.post('/paymentHistory', verifyToken, verifyMember, async (req, res) => { //Member
             const response = req.body;
             const email = req.body.email;
@@ -185,7 +185,7 @@ async function run() {
 
         app.post('/checkCoupon', verifyToken, verifyMember, async (req, res) => { // Member
             const code = req.body.code;
-            console.log(code);
+            // console.log(code);
 
             const coupon = await couponsBase.findOne({ code: code });
 
@@ -317,8 +317,8 @@ async function run() {
         // All [ PUT ] APIS >
         // All [ DELETE ] APIS >
 
-        await client.db("admin").command({ ping: 1 });  // Need to comment this part before deployment
-        console.log("Connected to MongoDB!");  // Need to comment this part before deployment
+        // await client.db("admin").command({ ping: 1 });  // Need to comment this part before deployment
+        // console.log("Connected to MongoDB!");  // Need to comment this part before deployment
     } finally {
         // await client.close();
     }
@@ -326,5 +326,5 @@ async function run() {
 run().catch(console.dir);
 
 app.listen(port, () => {
-    console.log(`Server is running on Port > ${port}`)
+    console.dir(`Server is running on Port > ${port}`)
 })
